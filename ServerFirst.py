@@ -12,7 +12,7 @@ def create_socket():
         host = ""
         port = 9999
         s = socket.socket()
-
+        s.settimeout(10000)
     except socket.error as msg:
         print("Socket creation error: " + str(msg))
 
