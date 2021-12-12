@@ -5,7 +5,7 @@ import time
 from queue import Queue
 
 NUMBER_OF_THREAD = 2
-JOB_NUMBER = [1 , 2]
+JOB_NUMBER = [1, 2]
 queue = Queue()
 all_connection = []
 all_address = []
@@ -23,17 +23,19 @@ def create_sockets():
     except socket.error as msg:
         print("There's a err happend: " + str(msg))
 
+
 def binding_socket():
     try:
         global host
         global port
         global s
         print("Binding the port " + str(port))
-        s.bind((host , port))
+        s.bind((host, port))
         s.listen(5)
     except socket.error as msg:
         print("Fail in binding the port " + str(msg) + "Retrying to connect...")
         binding_socket()
+
 
 # Handling connections from multiple clients and saving to a list
 # Closing previous connections when server.py file is restarted
@@ -47,11 +49,11 @@ def accepting_connection():
 
     while True:
         try:
-            conn , address = s.accept()
-            s.setblocking(1) # prevent timeout
+            conn, address = s.accept()
+            s.setblocking(1)  # prevent timeout
             all_connection.append(conn)
             all_address.append(address)
-            print("Connection has been established "+ address[0])
+            print("Connection has been established " + address[0])
         except:
             print("Connection err")
 
