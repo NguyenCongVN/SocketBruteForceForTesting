@@ -4,7 +4,8 @@ import traceback
 from queue import Queue
 from pynput.mouse import Listener as MouseListener
 from pynput.keyboard import Listener as KeyboardListener
-from pynput import keyboard
+from pynput.keyboard import Key, KeyCode
+import pyperclip
 
 NUMBER_OF_THREADS = 6
 JOB_NUMBER = [1, 2, 3, 4, 5, 6]
@@ -15,6 +16,7 @@ global x_click
 global y_click
 global enable_send_click
 global keys_to_send
+global keys_is_pressing
 global enable_send_key
 
 
@@ -97,6 +99,9 @@ def start_turtle():
             print('Enable send click to client successfully')
         elif 'enable_key' in cmd:
             global enable_send_key
+            global keys_to_send
+            while not keys_to_send.empty():
+                keys_to_send.get()
             enable_send_key = True
             print('Enable send key to client successfully')
         else:
@@ -189,7 +194,7 @@ def send_target_commands(conn):
 
 
 def send_target_commands_click(conn, x, y):
-    cmd = f'click_mouse_client.py {x} {y}'
+    cmd = f'cl {x} {y}'
     try:
         if len(str.encode(cmd)) > 0:
             print(str.encode(cmd))
@@ -202,7 +207,7 @@ def send_target_commands_click(conn, x, y):
 
 
 def send_target_commands_keys(conn, key):
-    cmd = f'keyboard_client.py {key}'
+    cmd = f'pr {key}'
     try:
         if len(str.encode(cmd)) > 0:
             print(str.encode(cmd))
@@ -216,7 +221,8 @@ def send_target_commands_keys(conn, key):
 
 def start_listen_click():
     def on_click(x, y, button, pressed):
-        if pressed:
+        global enable_send_click
+        if pressed and enable_send_click:
             global x_click
             global y_click
             print('Mouse clicked at ({0}, {1}) with {2}'.format(x, y, button))
@@ -229,17 +235,51 @@ def start_listen_click():
 
 def start_listen_key():
     def on_press(key):
-        try:
-            print('alphanumeric key {0} pressed'.format(
-                key.char))
-            global keys_to_send
-            keys_to_send.put(str(key.char))
-        except AttributeError:
-            print('special key {0} pressed'.format(
-                key))
+        global keys_is_pressing
+        global enable_send_key
+        if enable_send_key:
+            try:
+                print('alphanumeric key {0} pressed'.format(
+                    str(key.char).encode()))
+                print(str(key.char).encode())
+                keys_is_pressing.put(str(key.char).encode())
+            except AttributeError:
+                print('special key {0} pressed'.format(
+                    key))
+                if key == Key.backspace:
+                    keys_is_pressing.put('backspace'.encode())
+                if key == Key.enter:
+                    keys_is_pressing.put('enter'.encode())
+                if key == Key.space:
+                    keys_is_pressing.put('space'.encode())
+                if key == Key.ctrl_l:
+                    keys_is_pressing.put('ctrl')
+
+    def on_release(key):
+        global keys_to_send
+        global keys_is_pressing
+        global enable_send_key
+        if enable_send_key:
+            if not keys_is_pressing.empty():
+                key_get = keys_is_pressing.get()
+                if 'ctrl' == key_get:
+                    if not keys_is_pressing.empty():
+                        check_key = keys_is_pressing.get()
+                        print(check_key)
+                        if b'\x03' == check_key:
+                            s = pyperclip.paste()
+                            print(s)
+                            pyperclip.copy(s)
+                            keys_to_send.put(f'cpy {s}')
+                            print('copy')
+                        elif b'\x16' == check_key:
+                            keys_to_send.put(f'pst')
+                            print('paste')
+                else:
+                    keys_to_send.put(key_get)
 
     with KeyboardListener(
-            on_press=on_press) as listener:
+            on_press=on_press, on_release=on_release) as listener:
         listener.join()
 
 
@@ -286,7 +326,9 @@ def main():
         global y_click
         enable_send_click = False
         global keys_to_send
+        global keys_is_pressing
         keys_to_send = Queue()
+        keys_is_pressing = Queue()
         global enable_send_key
         enable_send_key = False
         x_click = None
